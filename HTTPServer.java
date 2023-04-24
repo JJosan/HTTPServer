@@ -58,16 +58,22 @@ public class HTTPServer {
 
                 switch(requestMethod) {
                     case "GET":
-                        handleGet(socket, FILE_ROOT+urlPath);
+                        handleGet(socket, FILE_ROOT+urlPath, extension);
                         break;
                     case "POST":
                         handlePost(socket, FILE_ROOT+urlPath, extension, body);
                         break;
                     case "PUT":
-                        handlePut(socket, FILE_ROOT+urlPath, body);
+                        handlePut(socket, FILE_ROOT+urlPath, extension, body);
                         break;
                     case "DELETE":
                         handleDelete(socket, FILE_ROOT+urlPath);
+                        break;
+                    case "OPTIONS":
+                        handleOptions(socket, extension);
+                        break;
+                    case "HEAD":
+                        handleHead(socket, FILE_ROOT+urlPath, extension);
                         break;
                     default:
                         break;
@@ -79,7 +85,7 @@ public class HTTPServer {
         }
     }
 
-    private static void handleGet(Socket socket, String filePath) throws IOException {
+    private static void handleGet(Socket socket, String filePath, String extension) throws IOException {
         // check if file exists
         if (!fileExists(filePath)) {
             notFound(socket);
@@ -87,7 +93,7 @@ public class HTTPServer {
         }
 
         // send contents
-        send(socket, filePath);
+        send(socket, filePath, extension);
     }
 
     private static void handlePost(Socket socket, String filePath, String extension, String body) throws IOException {
@@ -112,10 +118,10 @@ public class HTTPServer {
         bufferedWriter.close();
 
         // send contents
-        send(socket, filePath);
+        send(socket, filePath, extension);
     }
 
-    private static void handlePut(Socket socket, String filePath, String body) throws IOException {
+    private static void handlePut(Socket socket, String filePath, String extension, String body) throws IOException {
         // create and write to file
         FileWriter fileWriter = new FileWriter(filePath, false);
         BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
@@ -123,7 +129,7 @@ public class HTTPServer {
         bufferedWriter.close();
 
         // send contents
-        send(socket, filePath);
+        send(socket, filePath, extension);
     }
 
     private static void handleDelete(Socket socket, String filePath) throws IOException {
@@ -147,6 +153,58 @@ public class HTTPServer {
         writer.close();
     }
 
+    private static void handleOptions(Socket socket, String extension) throws IOException {
+        // get options
+        String body = "";
+        switch(extension) {
+            case "txt":
+                body = "GET, POST, PUT, DELETE";
+                break;
+            case "html":
+                body = "GET, PUT, DELETE";
+                break;
+            case "json":
+                body = "GET, PUT, DELETE";
+                break;
+            default:
+                body = "N/A";
+                break;
+        }
+
+        // send options
+        OutputStream out = socket.getOutputStream();
+        PrintWriter writer = new PrintWriter(out, true);
+        String header = "HTTP/1.1 200 OK\r\n"+
+                        "Content-Type: text/plain\r\n"+
+                        "Content-Length: " + body.length() + "\r\n"+
+                        "\r\n";
+        
+        writer.println(header+body);
+        out.close();
+        writer.close();
+    }
+
+    private static void handleHead(Socket socket, String filePath, String extension) throws IOException {
+        // check if file exists
+        if (!fileExists(filePath)) {
+            notFound(socket);
+            return;
+        }
+
+        // send head only
+        OutputStream out = socket.getOutputStream();
+        PrintWriter writer = new PrintWriter(out, true);
+        String body = readFile(filePath);
+        String header = "HTTP/1.1 200 OK\r\n"+
+                        "Content-Type: "+SUPPORTED_MIME_TYPES.get(extension)+"\r\n"+
+                        "Content-Length: " + body.length() + "\r\n"+
+                        "\r\n";
+        writer.println(header);
+        out.close();
+        writer.close();
+        
+    }
+
     // returns contents from a filepath as a string
     private static String readFile(String filePath) throws IOException {
         File file = new File(filePath);
@@ -161,12 +219,12 @@ public class HTTPServer {
     }
 
     // sends status code 200 with contents of the file found at file path
-    private static void send(Socket socket, String filePath) throws IOException {
+    private static void send(Socket socket, String filePath, String extension) throws IOException {
         OutputStream out = socket.getOutputStream();
         PrintWriter writer = new PrintWriter(out, true);
         String body = readFile(filePath);
         String header = "HTTP/1.1 200 OK\r\n"+
-                        "Content-Type: text/plain\r\n"+
+                        "Content-Type: "+SUPPORTED_MIME_TYPES.get(extension)+"\r\n"+
                         "Content-Length: " + body.length() + "\r\n"+
                         "\r\n";
         writer.println(header + body);
